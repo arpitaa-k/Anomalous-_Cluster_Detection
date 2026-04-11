@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Data and outputs
+data/**
+!data/.gitkeep
+
+results/*.csv
+results/*.png
+results/*.json
+!results/.gitkeep
+!results/anomalies_top50_sample.csv
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
