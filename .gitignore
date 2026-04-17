@@ -10,6 +10,9 @@ venv/
 # Data and outputs
 data/**
 !data/.gitkeep
+!data/day-wise csv/
+data/day-wise csv/**
+!data/day-wise csv/.gitkeep
 
 results/*.csv
 results/*.png
@@ -24,3 +27,6 @@ results/*.json
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local command checklist
+COMMANDS_LOCAL.md

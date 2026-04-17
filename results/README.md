@@ -1,7 +1,14 @@
 # Results Folder
 
-- `anomalies_top50_sample.csv` contains a 50-row sample for GitHub preview.
-- Full result files (for example `anomalies.csv`) are excluded by `.gitignore` because they can be large.
+- The pipeline now generates these local artifacts automatically after each run:
+	- output anomaly table (for example `anomalies_wed_quick.csv`)
+	- `top_50_anomalies.csv`
+	- `plot_score_distribution.png`
+	- `plot_top_20_anomalies.png`
+	- `plot_score_by_label.png` (only when labels are available)
+	- `assignment_summary.md`
+
+- Large CSV/PNG outputs are excluded by `.gitignore` because they can be large.
 
 To regenerate sample from full output:
 

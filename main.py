@@ -1,12 +1,15 @@
 import argparse
 from pathlib import Path
 
-from src.config import PipelineConfig
-from src.data_loader import load_cicids_folder, standardize_flow_columns
-from src.graph_builder import build_weighted_graph
-from src.oddball import compute_node_features, oddball_score
-from src.stats import apply_z_test
-from src.thresholding import apply_adaptive_threshold
+import pandas as pd
+
+from config import PipelineConfig
+from data_loader import build_node_majority_labels, load_cicids_folder, standardize_flow_columns
+from graph_builder import build_weighted_graph
+from oddball import compute_node_features, oddball_score
+from reporting import generate_artifacts
+from stats import apply_z_test, evaluate_with_labels
+from thresholding import apply_adaptive_threshold
 
 
 def parse_args() -> PipelineConfig:
@@ -35,6 +38,7 @@ def parse_args() -> PipelineConfig:
 def run_pipeline(cfg: PipelineConfig) -> None:
     raw_df = load_cicids_folder(cfg.input_dir, max_rows=cfg.max_rows)
     flows = standardize_flow_columns(raw_df)
+    node_labels = build_node_majority_labels(flows)
 
     graph = build_weighted_graph(flows)
     features = compute_node_features(graph)
@@ -48,20 +52,32 @@ def run_pipeline(cfg: PipelineConfig) -> None:
         sigma=cfg.threshold_sigma,
     )
 
-    thresholded["passes_hypothesis_test"] = (thresholded["p_value"] < cfg.alpha) & (
-        thresholded["z_score"].abs() >= cfg.z_threshold
-    )
+    if not node_labels.empty:
+        thresholded = thresholded.merge(node_labels, how="left", left_on="node", right_on="node")
+
+    eval_metrics = evaluate_with_labels(thresholded, score_col="oddball_score", label_col="is_malicious")
+
+    thresholded["group_hypothesis_pass"] = bool(eval_metrics.get("group_hypothesis_pass", 0.0) >= 1.0)
+    thresholded["passes_hypothesis_test"] = pd.NA
 
     cfg.output_file.parent.mkdir(parents=True, exist_ok=True)
     thresholded.sort_values(by="oddball_score", ascending=False).to_csv(cfg.output_file, index=False)
+    artifacts = generate_artifacts(thresholded, cfg.output_file, eval_metrics)
 
     total_nodes = len(thresholded)
     anomalies = int(thresholded["is_anomaly"].sum())
-    confirmed = int(thresholded["passes_hypothesis_test"].sum())
+    confirmed = int(bool(eval_metrics.get("group_hypothesis_pass", 0.0) >= 1.0))
 
     print(f"Processed nodes: {total_nodes}")
     print(f"Adaptive anomalies: {anomalies}")
-    print(f"Hypothesis-confirmed anomalies: {confirmed}")
+    print(f"Group-level hypothesis pass: {confirmed}")
+    if eval_metrics:
+        print("Label-aware evaluation:")
+        for key, value in eval_metrics.items():
+            print(f"  {key}: {value}")
+    print("Generated artifacts:")
+    for name, path in artifacts.items():
+        print(f"  {name}: {path}")
     print(f"Saved results to: {cfg.output_file}")
 
 
