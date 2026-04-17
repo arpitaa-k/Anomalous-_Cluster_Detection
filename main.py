@@ -8,7 +8,7 @@ from data_loader import build_node_majority_labels, load_cicids_folder, standard
 from graph_builder import build_weighted_graph
 from oddball import compute_node_features, oddball_score
 from reporting import generate_artifacts
-from stats import apply_z_test, evaluate_with_labels
+from stats import apply_z_test, evaluate_flow_labels, evaluate_with_labels
 from thresholding import apply_adaptive_threshold
 
 
@@ -57,12 +57,17 @@ def run_pipeline(cfg: PipelineConfig) -> None:
 
     eval_metrics = evaluate_with_labels(thresholded, score_col="oddball_score", label_col="is_malicious")
 
+    flow_scored = flows.copy()
+    node_score_map = scored.set_index("node")["oddball_score"]
+    flow_scored["source_oddball_score"] = flow_scored["src"].map(node_score_map)
+    flow_metrics = evaluate_flow_labels(flow_scored, score_col="source_oddball_score", label_col="label")
+
     thresholded["group_hypothesis_pass"] = bool(eval_metrics.get("group_hypothesis_pass", 0.0) >= 1.0)
     thresholded["passes_hypothesis_test"] = pd.NA
 
     cfg.output_file.parent.mkdir(parents=True, exist_ok=True)
     thresholded.sort_values(by="oddball_score", ascending=False).to_csv(cfg.output_file, index=False)
-    artifacts = generate_artifacts(thresholded, cfg.output_file, eval_metrics)
+    artifacts = generate_artifacts(graph, thresholded, cfg.output_file, eval_metrics, flow_df=flow_scored, flow_metrics=flow_metrics)
 
     total_nodes = len(thresholded)
     anomalies = int(thresholded["is_anomaly"].sum())
@@ -75,6 +80,24 @@ def run_pipeline(cfg: PipelineConfig) -> None:
         print("Label-aware evaluation:")
         for key, value in eval_metrics.items():
             print(f"  {key}: {value}")
+        attack_metrics = sorted(
+            key for key in eval_metrics.keys() if key.endswith("_auc") or key.endswith("_mann_whitney_p")
+        )
+        if attack_metrics:
+            print("Per-attack-family metrics:")
+            for key in attack_metrics:
+                print(f"  {key}: {eval_metrics[key]}")
+    if flow_metrics:
+        print("Flow-label evaluation:")
+        for key, value in flow_metrics.items():
+            print(f"  {key}: {value}")
+        flow_attack_metrics = sorted(
+            key for key in flow_metrics.keys() if key.endswith("_auc") or key.endswith("_mann_whitney_p")
+        )
+        if flow_attack_metrics:
+            print("Flow per-attack-family metrics:")
+            for key in flow_attack_metrics:
+                print(f"  {key}: {flow_metrics[key]}")
     print("Generated artifacts:")
     for name, path in artifacts.items():
         print(f"  {name}: {path}")
