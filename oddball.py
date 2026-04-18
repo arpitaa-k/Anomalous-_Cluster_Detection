@@ -1,9 +1,12 @@
+from pathlib import Path
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
+from scipy.sparse.linalg import eigs
+from data_loader import load_dataframe_pkl, load_graph_pkl
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import LocalOutlierFactor
-from scipy.sparse.linalg import eigs
 
 
 def _safe_min_max(values: np.ndarray) -> np.ndarray:
@@ -70,9 +73,16 @@ def compute_node_features(graph: nx.DiGraph) -> pd.DataFrame:
                 eigvals = np.linalg.eigvals(w_matrix)
                 lambda_w = float(np.max(np.real(eigvals)))
             else:
-                sparse_matrix = nx.to_scipy_sparse_array(subgraph, weight="weight", dtype=float, format="csr")
+                sparse_matrix = nx.to_scipy_sparse_array(
+                    subgraph, weight="weight", dtype=float, format="csr"
+                )
                 try:
-                    eigval = eigs(sparse_matrix, k=1, which="LR", return_eigenvectors=False)[0]
+                    eigval = eigs(
+                        sparse_matrix,
+                        k=1,
+                        which="LR",
+                        return_eigenvectors=False,
+                    )[0]
                     lambda_w = float(np.real(eigval))
                 except Exception:
                     w_matrix = nx.to_numpy_array(subgraph, weight="weight", dtype=float)
@@ -145,3 +155,50 @@ def oddball_score(feature_df: pd.DataFrame) -> pd.DataFrame:
     ) / 5.0
 
     return df
+
+
+def main() -> None:
+    graph_path = Path("data/friday_graph.pkl")
+    labels_path = Path("data/friday_labels.pkl")
+    output_path = Path("results/oddball_scores_friday.csv")
+
+    print("=" * 70)
+    print("STEP 2: ODDBALL SCORING")
+    print("=" * 70)
+
+    if not graph_path.exists():
+        raise FileNotFoundError(
+            f"Graph file not found at {graph_path}. Run: python data_loader.py"
+        )
+
+    graph = load_graph_pkl(graph_path)
+
+    print("\nComputing node features...")
+    features = compute_node_features(graph)
+    print(f"Feature rows: {len(features)}")
+
+    print("\nComputing OddBall scores...")
+    scored = oddball_score(features)
+    print(f"Scored nodes: {len(scored)}")
+
+    if labels_path.exists():
+        labels = load_dataframe_pkl(labels_path)
+        scored = scored.merge(labels, on="node", how="left")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    scored.sort_values("oddball_score", ascending=False).to_csv(output_path, index=False)
+
+    print(f"\nSaved scores to: {output_path}")
+
+    print("\nTop 20 suspicious nodes:")
+    preview_cols = ["node", "oddball_score"]
+    if "majority_label" in scored.columns:
+        preview_cols.append("majority_label")
+    if "is_malicious" in scored.columns:
+        preview_cols.append("is_malicious")
+
+    print(scored.sort_values("oddball_score", ascending=False).head(20)[preview_cols].to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

@@ -8,14 +8,12 @@ __pycache__/
 venv/
 
 # Data and outputs
-data/**
+data/*.csv
 !data/.gitkeep
-!data/day-wise csv/
-data/day-wise csv/**
-!data/day-wise csv/.gitkeep
 
-results/*.csv
-results/*.png
+
+# results/*.csv
+# results/*.png
 results/*.json
 !results/.gitkeep
 !results/anomalies_top50_sample.csv
