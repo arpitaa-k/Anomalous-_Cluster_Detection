@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-INPUT_PATH = Path("results/oddball_temporal_scores.csv")
+INPUT_PATH = Path("results/temporal/oddball/scores.csv")
 OUTPUT_CSV = Path("results/changepoint_detection_results.csv")
 OUTPUT_MD = Path("results/changepoint_detection_summary.md")
 

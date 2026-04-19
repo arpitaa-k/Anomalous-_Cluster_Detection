@@ -6,7 +6,7 @@ from sklearn.cluster import SpectralClustering
 from sklearn.metrics.pairwise import rbf_kernel
 
 
-INPUT_PATH = Path("results/oddball_temporal_scores.csv")
+INPUT_PATH = Path("results/temporal/oddball/scores.csv")
 OUTPUT_CSV = Path("results/coordination_detection_clusters.csv")
 OUTPUT_MD = Path("results/coordination_detection_summary.md")
 

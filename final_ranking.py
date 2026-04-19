@@ -9,15 +9,15 @@ RESULTS_DIR = Path("results/final")
 ATTACKER_NODE = "172.16.0.1"
 
 STATIC_SOURCES = {
-    "OddBall": (RESULTS_DIR / "oddball_scores_friday.csv", "oddball_score"),
-    "LOF": (RESULTS_DIR / "lof_scores_friday.csv", "lof_score"),
-    "IsolationForest": (RESULTS_DIR / "isolation_forest_scores_friday.csv", "isolation_forest_score"),
+    "OddBall": (Path("results/static/oddball/scores.csv"), "oddball_score"),
+    "LOF": (Path("results/static/lof/scores.csv"), "lof_score"),
+    "IsolationForest": (Path("results/static/isolation_forest/scores.csv"), "isolation_forest_score"),
 }
 
 TEMPORAL_SOURCES = {
-    "OddBall": (RESULTS_DIR / "oddball_temporal_scores.csv", "oddball_score"),
-    "LOF": (RESULTS_DIR / "lof_temporal_scores.csv", "lof_score"),
-    "IsolationForest": (RESULTS_DIR / "isolation_forest_temporal_scores.csv", "isolation_forest_score"),
+    "OddBall": (Path("results/temporal/oddball/scores.csv"), "oddball_score"),
+    "LOF": (Path("results/temporal/lof/scores.csv"), "lof_score"),
+    "IsolationForest": (Path("results/temporal/isolation_forest/scores.csv"), "isolation_forest_score"),
 }
 
 

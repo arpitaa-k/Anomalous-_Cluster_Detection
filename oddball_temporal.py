@@ -86,6 +86,10 @@ for i, (w_start, w_end) in enumerate(window_edges):
 if results:
     summary_md = Path("results/summary_outputs.md")
     all_scores = pd.concat(results, ignore_index=True)
+    # Add out_in_degree_ratio and out_degree_share for LOF_temporal compatibility
+    eps = 1e-9
+    all_scores["out_in_degree_ratio"] = (all_scores["out_degree"] + 1.0) / (all_scores["in_degree"] + 1.0)
+    all_scores["out_degree_share"] = all_scores["out_degree"] / (all_scores["degree"] + eps)
     all_scores.to_csv(CSV_PATH, index=False)
     print(f"\n✓ Saved all temporal OddBall scores to: {CSV_PATH}")
 
@@ -97,12 +101,20 @@ if results:
         return top
 
     import matplotlib.pyplot as plt
+    import itertools
     plt.figure(figsize=(12, 6))
     top_oddball = get_top_nodes(all_scores, "oddball_score", n=4)
+    # Use a color cycle for non-attacker nodes
+    color_cycle = itertools.cycle(["crimson", "royalblue", "seagreen", "darkorange", "purple", "teal", "brown"])
+    node_colors = {}
+    for node in top_oddball:
+        if str(node) == "172.16.0.1":
+            node_colors[node] = "gold"
+        else:
+            node_colors[node] = next(color_cycle)
     for node in top_oddball:
         node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
-        color = "gold" if str(node) == "172.16.0.1" else "crimson"
-        plt.plot(node_df["window_start"], node_df["oddball_score"], marker='o', label=node, color=color)
+        plt.plot(node_df["window_start"], node_df["oddball_score"], marker='o', label=node, color=node_colors[node])
     plt.xlabel("Time Window Start")
     plt.ylabel("OddBall Score")
     plt.title("Top Nodes: OddBall Score Over Time (Temporal OddBall)\n[Attacker highlighted in gold]")
