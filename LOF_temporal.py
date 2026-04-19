@@ -5,8 +5,11 @@ import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 
 
-INPUT_PATH = Path("results/oddball_temporal_scores.csv")
-OUTPUT_PATH = Path("results/lof_temporal_scores.csv")
+INPUT_PATH = Path("results/temporal/oddball/scores.csv")
+OUTPUT_DIR = Path("results/temporal/lof")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_PATH = OUTPUT_DIR / "scores.csv"
+PLOT_PATH = OUTPUT_DIR / "lof_score_timeseries.png"
 FEATURE_COLS = [
     "degree",
     "out_degree",
@@ -51,6 +54,7 @@ def _compute_window_lof(window_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    summary_md = Path("results/summary_outputs.md")
     print("=" * 70)
     print("STEP 3: TEMPORAL LOF SCORING")
     print("=" * 70)
@@ -92,8 +96,40 @@ def main() -> None:
 
     output_df = pd.concat(results, ignore_index=True)
     output_df.to_csv(OUTPUT_PATH, index=False)
-    print(f"\nSaved temporal LOF scores to: {OUTPUT_PATH}")
+    print(f"\n✓ Saved temporal LOF scores to: {OUTPUT_PATH}")
 
+    # Only one clear plot: LOF Score Over Time for top nodes, highlight attacker
+    def get_top_nodes(df, score_col, n=4, attacker="172.16.0.1"):
+        top = df.groupby("node")[score_col].max().sort_values(ascending=False).head(n).index.tolist()
+        if attacker not in top and attacker in df["node"].values:
+            top = top[:-1] + [attacker]
+        return top
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+    top_lof = get_top_nodes(output_df, "lof_score", n=4)
+    for node in top_lof:
+        node_df = output_df[output_df["node"] == node].sort_values("window_start")
+        color = "gold" if str(node) == "172.16.0.1" else "darkorange"
+        plt.plot(node_df["window_start"], node_df["lof_score"], marker='o', label=node, color=color)
+    plt.xlabel("Time Window Start")
+    plt.ylabel("LOF Score")
+    plt.title("Top Nodes: LOF Score Over Time (Temporal LOF)\n[Attacker highlighted in gold]")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(PLOT_PATH)
+    plt.close()
+    print(f"✓ Saved plot to: {PLOT_PATH}")
+
+    # Print concise summary and append to markdown
+    summary = []
+    summary.append(f"## LOF Temporal\n")
+    summary.append(f"✓ Saved temporal LOF scores to: {OUTPUT_PATH}")
+    summary.append("\nTop 5 suspicious nodes by max LOF score:\n")
+    summary.append(output_df.groupby("node")["lof_score"].max().sort_values(ascending=False).head(5).to_string())
+    with open(summary_md, "a", encoding="utf-8") as f:
+        f.write("\n".join(summary) + "\n\n---\n")
 
 if __name__ == "__main__":
     main()

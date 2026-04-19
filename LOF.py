@@ -84,55 +84,61 @@ def compute_lof_scores(feature_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+import matplotlib.pyplot as plt
+
 def main() -> None:
     graph_path = Path("data/friday_graph.pkl")
     labels_path = Path("data/friday_labels.pkl")
-    output_path = Path("results/lof_scores_friday.csv")
+    output_dir = Path("results/static/lof")
+    output_path = output_dir / "scores.csv"
+    plot_path = output_dir / "top20_plot.png"
+    summary_md = Path("results/summary_outputs.md")
 
-    print("=" * 70)
-    print("STEP 2: LOF SCORING")
-    print("=" * 70)
-
+    print("\n[LOF] Scoring nodes...")
     if not graph_path.exists():
-        raise FileNotFoundError(
-            f"Graph file not found at {graph_path}. Run: python data_loader.py"
-        )
+        raise FileNotFoundError(f"Graph file not found at {graph_path}. Run: python data_loader.py")
 
     graph = _load_graph(graph_path)
-
-    print("\nComputing node features...")
     features = compute_node_features(graph)
-    print(f"Feature rows: {len(features)}")
-
-    print("\nComputing LOF scores...")
     scored = compute_lof_scores(features)
-    print(f"Scored nodes: {len(scored)}")
 
     labels = _try_load_labels(labels_path)
     if labels is not None:
         scored = scored.merge(labels, on="node", how="left")
-        print(f"Merged labels for {labels['node'].nunique()} nodes")
-    else:
-        print("Continuing without labels")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     scored.sort_values("lof_score", ascending=False).to_csv(output_path, index=False)
 
-    print(f"\nSaved scores to: {output_path}")
-
-    print("\nTop 20 suspicious nodes:")
-    preview_cols = ["node", "lof_score_raw", "lof_score"]
+    # Print concise summary
+    summary = []
+    summary.append(f"## LOF Static\n")
+    summary.append(f"✓ Saved LOF scores to: {output_path}")
+    top_nodes = scored.sort_values("lof_score", ascending=False).head(10)
+    preview_cols = ["node", "lof_score"]
     if "majority_label" in scored.columns:
         preview_cols.append("majority_label")
     if "is_malicious" in scored.columns:
         preview_cols.append("is_malicious")
+    summary.append("\nTop 10 suspicious nodes:\n")
+    summary.append(top_nodes[preview_cols].to_markdown(index=False))
 
-    print(
-        scored.sort_values("lof_score", ascending=False)
-        .head(20)[preview_cols]
-        .to_string(index=False)
-    )
+    # Append summary to markdown file
+    with open(summary_md, "a", encoding="utf-8") as f:
+        f.write("\n".join(summary) + "\n\n---\n")
 
+    # Plot top 20 suspicious nodes, highlight attacker if present
+    top20 = scored.sort_values("lof_score", ascending=False).head(20)
+    attacker = "172.16.0.1"
+    colors = ["gold" if str(n) == attacker else "darkorange" for n in top20["node"]]
+    plt.figure(figsize=(10, 5))
+    plt.bar(top20["node"].astype(str), top20["lof_score"], color=colors)
+    plt.xticks(rotation=75, ha="right", fontsize=8)
+    plt.ylabel("LOF Score")
+    plt.title("Top 20 Suspicious Nodes (LOF)\n[Attacker highlighted in gold]")
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"✓ Saved plot to: {plot_path}")
 
 if __name__ == "__main__":
     main()

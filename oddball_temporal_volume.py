@@ -14,6 +14,7 @@ from oddball import compute_node_features, oddball_score
 from data_loader import load_dataframe_pkl
 import matplotlib.pyplot as plt
 
+
 # --- Parameters ---
 DATA_PATH = Path("data/friday_flows.pkl")
 TIME_COL = "timestamp"
@@ -22,6 +23,12 @@ DST_COL = "dst"
 WEIGHT_COL = "weight"
 BYTES_COL = "total_length_of_fwd_packets"  # Change if you want to use another bytes column
 WINDOW_MINUTES = 10
+OUTPUT_DIR = Path("results/temporal/oddball_volume")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+CSV_PATH = OUTPUT_DIR / "scores.csv"
+PLOT_COMBINED_PATH = OUTPUT_DIR / "combined_score_timeseries.png"
+PLOT_FLOWS_PATH = OUTPUT_DIR / "num_flows_timeseries.png"
+PLOT_ODDBALL_PATH = OUTPUT_DIR / "oddball_score_timeseries.png"
 
 # --- Load Data ---
 print("\nLoading Friday dataframe ...")
@@ -99,85 +106,47 @@ for i, (w_start, w_end) in enumerate(window_edges):
     print(scored.sort_values("combined_score", ascending=False)
               .head(5)[["node", "combined_score", "oddball_score", "num_flows", "total_bytes", "total_packets"]].to_string(index=False))
 
-# --- Combine all results for later analysis ---
 if results:
+    summary_md = Path("results/summary_outputs.md")
     all_scores = pd.concat(results, ignore_index=True)
-    out_path = Path("results/oddball_volume_temporal_scores.csv")
-    all_scores.to_csv(out_path, index=False)
-    print(f"\nSaved all temporal OddBall+Volume scores to: {out_path}")
+    all_scores.to_csv(CSV_PATH, index=False)
+    print(f"\n✓ Saved all temporal OddBall+Volume scores to: {CSV_PATH}")
+
+    # Helper: get top N nodes by max combined score (always include attacker)
+    def get_top_nodes(df, score_col, n=4, attacker="172.16.0.1"):
+        top = df.groupby("node")[score_col].max().sort_values(ascending=False).head(n).index.tolist()
+        if attacker not in top and attacker in df["node"].values:
+            top = top[:-1] + [attacker]
+        return top
+
+    # Only one clear plot: Combined Score Over Time for top nodes, highlight attacker
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+    top_combined = get_top_nodes(all_scores, "combined_score", n=4)
+    for node in top_combined:
+        node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
+        color = "gold" if str(node) == "172.16.0.1" else "purple"
+        plt.plot(node_df["window_start"], node_df["combined_score"], marker='o', label=node, color=color)
+    plt.xlabel("Time Window Start")
+    plt.ylabel("Combined Anomaly Score")
+    plt.title("Top Nodes: Combined OddBall + Flow Volume Anomaly Score Over Time\n[Attacker highlighted in gold]")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(PLOT_COMBINED_PATH)
+    plt.close()
+    print(f"✓ Saved plot to: {PLOT_COMBINED_PATH}")
+
+    # Print concise summary and append to markdown
+    summary = []
+    summary.append(f"## OddBall+Volume Temporal\n")
+    summary.append(f"✓ Saved all temporal OddBall+Volume scores to: {CSV_PATH}")
+    summary.append("\nTop 5 suspicious nodes by max combined score:\n")
+    summary.append(all_scores.groupby("node")["combined_score"].max().sort_values(ascending=False).head(5).to_string())
+    with open(summary_md, "a", encoding="utf-8") as f:
+        f.write("\n".join(summary) + "\n\n---\n")
 else:
     print("\nNo results to save (no non-empty windows found)")
-
-# --- Visualization: Plot combined anomaly score over time for key nodes ---
-print("\nPlotting combined anomaly score over time for key nodes...")
-top_nodes = set()
-for window_df in results:
-    top_nodes.update(window_df.sort_values("combined_score", ascending=False).head(3)["node"])
-# Always include attacker if present
-if "172.16.0.1" in all_scores["node"].values:
-    top_nodes.add("172.16.0.1")
-
-plt.figure(figsize=(14, 7))
-for node in top_nodes:
-    node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
-    plt.plot(node_df["window_start"], node_df["combined_score"], marker='o', label=node)
-plt.xlabel("Time Window Start")
-plt.ylabel("Combined Anomaly Score")
-plt.title("Combined OddBall + Flow Volume Anomaly Score Over Time")
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-plt.savefig("results/oddball_volume_timeseries.png")
-plt.show()
-print("Saved plot to results/oddball_volume_timeseries.png")
-
-# --- Visualization: Plot top nodes (including attacker) ---
-import matplotlib.pyplot as plt
-
-# Helper: get top N nodes by max combined score (always include attacker)
-def get_top_nodes(df, score_col, n=4, attacker="172.16.0.1"):
-    top = df.groupby("node")[score_col].max().sort_values(ascending=False).head(n).index.tolist()
-    if attacker not in top and attacker in df["node"].values:
-        top = top[:-1] + [attacker]  # ensure attacker is always included
-    return top
-
-# Load all results (if not already loaded)
-all_scores = pd.concat(results, ignore_index=True) if results else pd.DataFrame()
-
-# 1. Combined Score Plot
-plt.figure(figsize=(12, 6))
-top_combined = get_top_nodes(all_scores, "combined_score", n=4)
-for node in top_combined:
-    node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
-    plt.plot(node_df["window_start"], node_df["combined_score"], marker='o', label=node)
-plt.xlabel("Time Window Start")
-plt.ylabel("Combined Anomaly Score")
-plt.title("Combined OddBall + Flow Volume Anomaly Score Over Time")
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-plt.savefig("results/oddball_volume_timeseries_combined.png")
-plt.show()
-print("Saved plot to results/oddball_volume_timeseries_combined.png")
-
-# 2. Flow Volume Plot (num_flows)
-plt.figure(figsize=(12, 6))
-top_flows = get_top_nodes(all_scores, "num_flows", n=4)
-for node in top_flows:
-    node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
-    plt.plot(node_df["window_start"], node_df["num_flows"], marker='o', label=node)
-plt.xlabel("Time Window Start")
-plt.ylabel("Number of Flows")
-plt.title("Flow Volume (Number of Flows) Over Time")
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-plt.savefig("results/oddball_volume_timeseries_flows.png")
-plt.show()
-print("Saved plot to results/oddball_volume_timeseries_flows.png")
-
-# 3. OddBall Score Plot
-plt.figure(figsize=(12, 6))
 top_oddball = get_top_nodes(all_scores, "oddball_score", n=4)
 for node in top_oddball:
     node_df = all_scores[all_scores["node"] == node].sort_values("window_start")

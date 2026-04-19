@@ -17,13 +17,18 @@ import numpy as np
 from oddball import compute_node_features, oddball_score
 from data_loader import load_dataframe_pkl
 
+
 # --- Parameters ---
 DATA_PATH = Path("data/friday_flows.pkl")
-TIME_COL = "timestamp"  # Use the correct column name from the DataFrame
+TIME_COL = "timestamp"
 SRC_COL = "src"
 DST_COL = "dst"
 WEIGHT_COL = "weight"
 WINDOW_MINUTES = 10
+OUTPUT_DIR = Path("results/temporal/oddball")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+CSV_PATH = OUTPUT_DIR / "scores.csv"
+PLOT_PATH = OUTPUT_DIR / "oddball_score_timeseries.png"
 
 # --- Load Data ---
 print("\nLoading Friday dataframe ...")
@@ -78,11 +83,43 @@ for i, (w_start, w_end) in enumerate(window_edges):
     print(scored.sort_values("oddball_score", ascending=False)
               .head(5)[["node", "oddball_score"]].to_string(index=False))
 
-# --- Combine all results for later analysis ---
 if results:
+    summary_md = Path("results/summary_outputs.md")
     all_scores = pd.concat(results, ignore_index=True)
-    out_path = Path("results/oddball_temporal_scores.csv")
-    all_scores.to_csv(out_path, index=False)
-    print(f"\nSaved all temporal OddBall scores to: {out_path}")
+    all_scores.to_csv(CSV_PATH, index=False)
+    print(f"\n✓ Saved all temporal OddBall scores to: {CSV_PATH}")
+
+    # Only one clear plot: OddBall Score Over Time for top nodes, highlight attacker
+    def get_top_nodes(df, score_col, n=4, attacker="172.16.0.1"):
+        top = df.groupby("node")[score_col].max().sort_values(ascending=False).head(n).index.tolist()
+        if attacker not in top and attacker in df["node"].values:
+            top = top[:-1] + [attacker]
+        return top
+
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(12, 6))
+    top_oddball = get_top_nodes(all_scores, "oddball_score", n=4)
+    for node in top_oddball:
+        node_df = all_scores[all_scores["node"] == node].sort_values("window_start")
+        color = "gold" if str(node) == "172.16.0.1" else "crimson"
+        plt.plot(node_df["window_start"], node_df["oddball_score"], marker='o', label=node, color=color)
+    plt.xlabel("Time Window Start")
+    plt.ylabel("OddBall Score")
+    plt.title("Top Nodes: OddBall Score Over Time (Temporal OddBall)\n[Attacker highlighted in gold]")
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(PLOT_PATH)
+    plt.close()
+    print(f"✓ Saved plot to: {PLOT_PATH}")
+
+    # Print concise summary and append to markdown
+    summary = []
+    summary.append(f"## OddBall Temporal\n")
+    summary.append(f"✓ Saved all temporal OddBall scores to: {CSV_PATH}")
+    summary.append("\nTop 5 suspicious nodes by max OddBall score:\n")
+    summary.append(all_scores.groupby("node")["oddball_score"].max().sort_values(ascending=False).head(5).to_string())
+    with open(summary_md, "a", encoding="utf-8") as f:
+        f.write("\n".join(summary) + "\n\n---\n")
 else:
     print("\nNo results to save (no non-empty windows found)")

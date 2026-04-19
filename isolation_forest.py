@@ -62,38 +62,52 @@ def compute_isolation_forest_scores(feature_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+import matplotlib.pyplot as plt
+
 def main() -> None:
     graph_path = Path("data/friday_graph.pkl")
-    output_path = Path("results/isolation_forest_scores_friday.csv")
+    output_dir = Path("results/static/isolation_forest")
+    output_path = output_dir / "scores.csv"
+    plot_path = output_dir / "top20_plot.png"
+    summary_md = Path("results/summary_outputs.md")
 
-    print("=" * 70)
-    print("STEP 2: ISOLATION FOREST SCORING")
-    print("=" * 70)
-
+    print("\n[ISOLATION FOREST] Scoring nodes...")
     if not graph_path.exists():
         raise FileNotFoundError(f"Graph file not found at {graph_path}.")
 
     graph = _load_graph(graph_path)
-
-    print("\nComputing node features...")
     features = compute_node_features(graph)
-    print(f"Feature rows: {len(features)}")
-
-    print("\nComputing Isolation Forest scores...")
     scored = compute_isolation_forest_scores(features)
-    print(f"Scored nodes: {len(scored)}")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     scored.sort_values("isolation_forest_score", ascending=False).to_csv(output_path, index=False)
 
-    print(f"\nSaved scores to: {output_path}")
-    print("\nTop 20 suspicious nodes:")
-    print(
-        scored.sort_values("isolation_forest_score", ascending=False)
-        .head(20)[["node", "isolation_forest_score_raw", "isolation_forest_score"]]
-        .to_string(index=False)
-    )
+    # Print concise summary
+    summary = []
+    summary.append(f"## Isolation Forest Static\n")
+    summary.append(f"✓ Saved Isolation Forest scores to: {output_path}")
+    top_nodes = scored.sort_values("isolation_forest_score", ascending=False).head(10)
+    preview_cols = ["node", "isolation_forest_score"]
+    summary.append("\nTop 10 suspicious nodes:\n")
+    summary.append(top_nodes[preview_cols].to_markdown(index=False))
 
+    # Append summary to markdown file
+    with open(summary_md, "a", encoding="utf-8") as f:
+        f.write("\n".join(summary) + "\n\n---\n")
+
+    # Plot top 20 suspicious nodes, highlight attacker if present
+    top20 = scored.sort_values("isolation_forest_score", ascending=False).head(20)
+    attacker = "172.16.0.1"
+    colors = ["gold" if str(n) == attacker else "seagreen" for n in top20["node"]]
+    plt.figure(figsize=(10, 5))
+    plt.bar(top20["node"].astype(str), top20["isolation_forest_score"], color=colors)
+    plt.xticks(rotation=75, ha="right", fontsize=8)
+    plt.ylabel("Isolation Forest Score")
+    plt.title("Top 20 Suspicious Nodes (Isolation Forest)\n[Attacker highlighted in gold]")
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"✓ Saved plot to: {plot_path}")
 
 if __name__ == "__main__":
     main()
