@@ -104,7 +104,7 @@ def save_top20_plot(final_df: pd.DataFrame) -> None:
     plt.ylabel("Node")
     plt.title("Top 20 Nodes by Final Suspicion Score")
     plt.tight_layout()
-        plt.savefig(RESULTS_DIR / "final_ranking_top20.png")
+    plt.savefig(RESULTS_DIR / "final_ranking_top20.png")
     plt.close()
 
 
@@ -152,7 +152,7 @@ def save_scatter_plot(final_df: pd.DataFrame) -> None:
         plt.legend()
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-        plt.savefig(RESULTS_DIR / "consistency_vs_static.png")
+    plt.savefig(RESULTS_DIR / "consistency_vs_static.png")
     plt.close()
 
 
@@ -179,7 +179,7 @@ def save_heatmap(final_df: pd.DataFrame, window_order: list[pd.Timestamp], tempo
     plt.ylabel("Top 20 Nodes")
     plt.title("Temporal Heatmap for Final Top 20 Nodes")
     plt.tight_layout()
-        plt.savefig(RESULTS_DIR / "temporal_heatmap.png")
+    plt.savefig(RESULTS_DIR / "temporal_heatmap.png")
     plt.close()
 
 
